@@ -61,3 +61,26 @@ export async function createSupplier(_: SettingsState, formData: FormData): Prom
     return { error: "Ce fournisseur existe déjà." };
   }
 }
+
+export async function updateCategory(formData: FormData) {
+  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const name = nameSchema.parse(formData.get("name"));
+  await prisma.$transaction([prisma.category.update({ where: { id }, data: { name } }), prisma.auditLog.create({ data: { userId: user.id, action: "CATEGORY_UPDATED", entityType: "Category", entityId: id } })]); revalidatePath("/parametres");
+}
+
+export async function updateUnit(formData: FormData) {
+  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), name: nameSchema, symbol: z.string().trim().min(1).max(20), decimals: z.coerce.number().int().min(0).max(3) }).parse(Object.fromEntries(formData));
+  await prisma.$transaction([prisma.unit.update({ where: { id: data.id }, data: { name: data.name, symbol: data.symbol, decimals: data.decimals } }), prisma.auditLog.create({ data: { userId: user.id, action: "UNIT_UPDATED", entityType: "Unit", entityId: data.id } })]); revalidatePath("/parametres");
+}
+
+export async function updateSupplier(formData: FormData) {
+  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), name: nameSchema, phone: z.string().trim().max(40), email: z.string().trim().max(255) }).parse(Object.fromEntries(formData));
+  await prisma.$transaction([prisma.supplier.update({ where: { id: data.id }, data: { name: data.name, phone: data.phone || null, email: data.email || null } }), prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: data.id } })]); revalidatePath("/parametres");
+}
+
+export async function toggleSetting(formData: FormData) {
+  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity")); const active = formData.get("active") === "true";
+  if (entity === "Category") await prisma.category.update({ where: { id }, data: { isActive: !active } });
+  if (entity === "Unit") await prisma.unit.update({ where: { id }, data: { isActive: !active } });
+  if (entity === "Supplier") await prisma.supplier.update({ where: { id }, data: { isActive: !active } });
+  await prisma.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id } }); revalidatePath("/parametres");
+}
