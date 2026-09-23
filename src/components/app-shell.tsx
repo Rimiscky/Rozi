@@ -77,9 +77,9 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
       <div className="lg:col-start-2">
         <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[var(--line)] bg-white/95 px-4 backdrop-blur md:px-7 lg:px-9">
           <div className="flex items-center gap-3 lg:hidden">
-            <button className="grid size-11 place-items-center rounded-xl border border-[var(--line)]" aria-label="Ouvrir le menu">
+            <Link href="/menu" className="grid size-11 place-items-center rounded-xl border border-[var(--line)]" aria-label="Ouvrir le menu">
               <Menu size={21} />
-            </button>
+            </Link>
             <Link href="/tableau-de-bord" className="text-xl font-extrabold tracking-tight">Rozi</Link>
           </div>
           <div className="hidden lg:block">
@@ -100,7 +100,7 @@ export function AppShell({ children, user }: { children: React.ReactNode; user: 
         <MobileLink href="/produits" label="Produits" icon={Boxes} />
         <MobileLink href="/entrees/nouvelle" label="Entrée" icon={PackagePlus} emphasized />
         <MobileLink href="/sorties/nouvelle" label="Sortie" icon={ArrowUpFromLine} />
-        <MobileLink href="/parametres" label="Plus" icon={Menu} />
+        <MobileLink href="/menu" label="Plus" icon={Menu} />
       </nav>
     </div>
   );
