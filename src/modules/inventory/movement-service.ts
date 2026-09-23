@@ -1,7 +1,8 @@
 import { MovementReason, MovementType, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { calculateStockChange, StockError } from "./stock-calculations";
 
-export class StockError extends Error {}
+export { StockError } from "./stock-calculations";
 
 type MovementInput = {
   productId: string;
@@ -26,23 +27,12 @@ export async function recordStockMovement(input: MovementInput) {
     `;
     if (!rows[0]) throw new StockError("Inventaire introuvable pour ce produit.");
 
-    const stockBefore = new Prisma.Decimal(rows[0].quantity);
-    let delta: Prisma.Decimal;
-    let stockAfter: Prisma.Decimal;
-
-    if (input.type === MovementType.ADJUSTMENT) {
-      if (input.countedQuantity === undefined) throw new StockError("La quantité comptée est obligatoire.");
-      stockAfter = new Prisma.Decimal(input.countedQuantity.toString());
-      delta = stockAfter.minus(stockBefore);
-      if (delta.equals(0)) throw new StockError("Le stock compté est identique au stock actuel.");
-    } else {
-      if (!input.quantity || input.quantity <= 0) throw new StockError("La quantité doit être supérieure à zéro.");
-      const absoluteQuantity = new Prisma.Decimal(input.quantity.toString());
-      delta = input.type === MovementType.IN ? absoluteQuantity : absoluteQuantity.negated();
-      stockAfter = stockBefore.plus(delta);
-    }
-
-    if (stockAfter.lessThan(0)) throw new StockError(`Stock insuffisant : ${stockBefore.toString()} disponible.`);
+    const { stockBefore, stockAfter, delta, quantity } = calculateStockChange({
+      type: input.type,
+      stockBefore: rows[0].quantity,
+      quantity: input.quantity,
+      countedQuantity: input.countedQuantity,
+    });
 
     await tx.inventory.update({
       where: { productId: input.productId },
@@ -55,7 +45,7 @@ export async function recordStockMovement(input: MovementInput) {
       supplierId: input.supplierId,
       type: input.type,
       reason: input.reason,
-      quantity: delta.abs(),
+      quantity,
       delta,
       stockBefore,
       stockAfter,
