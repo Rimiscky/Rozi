@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Session } from "next-auth";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -11,6 +12,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
+import { signOut } from "@/auth";
 
 const primaryNavigation = [
   { href: "/tableau-de-bord", label: "Tableau de bord", icon: LayoutDashboard },
@@ -26,7 +28,14 @@ const adminNavigation = [
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, user }: { children: React.ReactNode; user: Session["user"] }) {
+  const initials = user.name
+    ?.split(" ")
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || user.username.slice(0, 2).toUpperCase();
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-68 border-r border-[var(--line)] bg-[var(--ink)] px-4 py-6 text-white lg:flex lg:flex-col">
@@ -54,12 +63,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto space-y-1 border-t border-white/10 pt-4">
-          {adminNavigation.map(({ href, label, icon: Icon }) => (
+          {user.role === "ADMIN" ? adminNavigation.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-white/65 hover:bg-white/8 hover:text-white">
               <Icon size={19} aria-hidden="true" />
               {label}
             </Link>
-          ))}
+          )) : null}
         </div>
       </aside>
 
@@ -74,9 +83,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="hidden lg:block">
             <p className="text-sm font-semibold text-[var(--ink-soft)]">Quincaillerie principale</p>
           </div>
-          <div className="grid size-10 place-items-center rounded-full bg-[var(--brand-pale)] text-sm font-extrabold text-[var(--brand-dark)]" aria-label="Compte de Rimiscky">
-            RS
-          </div>
+          <form action={async () => { "use server"; await signOut({ redirectTo: "/connexion" }); }}>
+            <button type="submit" className="grid size-10 place-items-center rounded-full bg-[var(--brand-pale)] text-sm font-extrabold text-[var(--brand-dark)]" aria-label={`Déconnecter ${user.name ?? user.username}`} title="Se déconnecter">
+              {initials}
+            </button>
+          </form>
         </header>
 
         <main className="mx-auto w-full max-w-[1480px] px-4 pb-28 pt-6 md:px-7 lg:px-9 lg:pb-10 lg:pt-8">{children}</main>
