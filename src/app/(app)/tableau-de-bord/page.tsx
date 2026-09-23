@@ -1,74 +1,28 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowDownToLine, ArrowRight, ArrowUpFromLine, Boxes, PackageX } from "lucide-react";
+import { MovementType } from "@/generated/prisma/client";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/permissions";
+import { DashboardCharts } from "./dashboard-charts";
 
-const stats = [
-  { label: "Produits", value: "0", note: "catalogue actif", icon: Boxes, tone: "neutral" },
-  { label: "Articles en stock", value: "0", note: "toutes unités", icon: ArrowDownToLine, tone: "green" },
-  { label: "Stock faible", value: "0", note: "à réapprovisionner", icon: AlertTriangle, tone: "orange" },
-  { label: "Ruptures", value: "0", note: "action nécessaire", icon: PackageX, tone: "red" },
-];
-
-export default function DashboardPage() {
-  return (
-    <div className="space-y-7">
-      <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-1 text-sm font-bold text-[var(--brand)]">Mardi 23 septembre</p>
-          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Bonjour, Rimiscky</h1>
-          <p className="mt-2 text-sm text-[var(--ink-soft)] sm:text-base">Voici la situation actuelle de votre stock.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/entrees/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-bold shadow-sm">
-            <ArrowDownToLine size={18} className="text-[var(--brand)]" /> Entrée
-          </Link>
-          <Link href="/sorties/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand)] px-4 text-sm font-bold text-white shadow-sm shadow-emerald-900/15">
-            <ArrowUpFromLine size={18} /> Sortie
-          </Link>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {stats.map(({ label, value, note, icon: Icon, tone }) => (
-          <article key={label} className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_5px_18px_rgba(16,42,34,.035)] sm:p-5">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-bold text-[var(--ink-soft)]">{label}</p>
-              <span className={`hidden size-9 place-items-center rounded-xl sm:grid ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "orange" ? "bg-amber-50 text-amber-700" : tone === "red" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>
-                <Icon size={18} />
-              </span>
-            </div>
-            <strong className="mt-4 block text-3xl font-extrabold tracking-tight">{value}</strong>
-            <span className="mt-1 block text-xs text-[var(--ink-soft)]">{note}</span>
-          </article>
-        ))}
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.45fr_1fr]">
-        <article className="min-h-72 rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-extrabold">Mouvements récents</h2>
-              <p className="mt-1 text-sm text-[var(--ink-soft)]">Les dernières entrées et sorties apparaîtront ici.</p>
-            </div>
-            <Link href="/historique" className="hidden items-center gap-1 text-sm font-bold text-[var(--brand)] sm:flex">Tout voir <ArrowRight size={16} /></Link>
-          </div>
-          <div className="grid min-h-48 place-items-center text-center">
-            <div>
-              <span className="mx-auto grid size-12 place-items-center rounded-2xl bg-[var(--canvas)] text-[var(--ink-soft)]"><Boxes size={22} /></span>
-              <p className="mt-3 text-sm font-bold">Aucun mouvement pour le moment</p>
-              <p className="mt-1 text-xs text-[var(--ink-soft)]">Créez votre premier produit pour commencer.</p>
-            </div>
-          </div>
-        </article>
-
-        <article className="rounded-2xl bg-[var(--ink)] p-5 text-white sm:p-6">
-          <p className="text-sm font-bold text-emerald-300">Démarrage rapide</p>
-          <h2 className="mt-2 max-w-xs text-2xl font-extrabold tracking-tight">Ajoutez votre premier produit au catalogue.</h2>
-          <p className="mt-3 max-w-sm text-sm leading-6 text-white/65">Renseignez son unité, son seuil d’alerte et son stock initial. Rozi enregistrera automatiquement le premier mouvement.</p>
-          <Link href="/produits/nouveau" className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-extrabold text-[var(--ink)]">
-            Ajouter un produit <ArrowRight size={17} />
-          </Link>
-        </article>
-      </section>
-    </div>
-  );
+export default async function DashboardPage() {
+  const user = await requireUser(); const now = new Date(); const today = new Date(now); today.setHours(0, 0, 0, 0); const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const [products, todayMovements, recentMovements, weeklyMovements, topGroups] = await Promise.all([
+    prisma.product.findMany({ where: { isActive: true }, include: { inventory: true, unit: true } }),
+    prisma.stockMovement.findMany({ where: { occurredAt: { gte: today }, type: { in: [MovementType.IN, MovementType.OUT] } }, select: { type: true } }),
+    prisma.stockMovement.findMany({ orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], take: 6, include: { product: { include: { unit: true } }, user: { select: { name: true } } } }),
+    prisma.stockMovement.findMany({ where: { occurredAt: { gte: sevenDaysAgo }, type: { in: [MovementType.IN, MovementType.OUT] } }, select: { occurredAt: true, type: true, quantity: true } }),
+    prisma.stockMovement.groupBy({ by: ["productId"], where: { type: MovementType.OUT }, _sum: { quantity: true }, orderBy: { _sum: { quantity: "desc" } }, take: 5 }),
+  ]);
+  const lowProducts = products.filter(p => Number(p.inventory?.quantity ?? 0) > 0 && Number(p.inventory?.quantity ?? 0) <= Number(p.alertThreshold)); const outProducts = products.filter(p => Number(p.inventory?.quantity ?? 0) === 0); const totalQuantity = products.reduce((sum, p) => sum + Number(p.inventory?.quantity ?? 0), 0); const entryCount = todayMovements.filter(m => m.type === MovementType.IN).length; const exitCount = todayMovements.filter(m => m.type === MovementType.OUT).length;
+  const topProductRecords = await prisma.product.findMany({ where: { id: { in: topGroups.map(x => x.productId) } }, select: { id: true, name: true } }); const topProducts = topGroups.map(group => ({ name: topProductRecords.find(p => p.id === group.productId)?.name ?? "Produit", quantity: Number(group._sum.quantity ?? 0) }));
+  const daily = Array.from({ length: 7 }, (_, index) => { const date = new Date(sevenDaysAgo); date.setDate(date.getDate() + index); const next = new Date(date); next.setDate(next.getDate() + 1); const movements = weeklyMovements.filter(m => m.occurredAt >= date && m.occurredAt < next); return { day: new Intl.DateTimeFormat("fr-FR", { weekday: "short" }).format(date).replace(".", ""), entrees: movements.filter(m => m.type === MovementType.IN).reduce((sum, m) => sum + Number(m.quantity), 0), sorties: movements.filter(m => m.type === MovementType.OUT).reduce((sum, m) => sum + Number(m.quantity), 0) }; });
+  const stats = [{ label: "Produits", value: products.length, note: "catalogue actif", icon: Boxes, tone: "neutral" }, { label: "Articles en stock", value: totalQuantity, note: `${entryCount} entrée(s) · ${exitCount} sortie(s) aujourd’hui`, icon: ArrowDownToLine, tone: "green" }, { label: "Stock faible", value: lowProducts.length, note: "à réapprovisionner", icon: AlertTriangle, tone: "orange" }, { label: "Ruptures", value: outProducts.length, note: "action nécessaire", icon: PackageX, tone: "red" }];
+  return <div className="space-y-7">
+    <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-1 text-sm font-bold capitalize text-[var(--brand)]">{new Intl.DateTimeFormat("fr-FR", { dateStyle: "full" }).format(now)}</p><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Bonjour, {user.name?.split(" ")[0] ?? user.username}</h1><p className="mt-2 text-sm text-[var(--ink-soft)] sm:text-base">Voici la situation actuelle de votre stock.</p></div><div className="grid grid-cols-2 gap-3"><Link href="/entrees/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-bold"><ArrowDownToLine size={18} className="text-[var(--brand)]" /> Entrée</Link><Link href="/sorties/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand)] px-4 text-sm font-bold text-white"><ArrowUpFromLine size={18} /> Sortie</Link></div></section>
+    <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">{stats.map(({ label, value, note, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><p className="text-sm font-bold text-[var(--ink-soft)]">{label}</p><span className={`hidden size-9 place-items-center rounded-xl sm:grid ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "orange" ? "bg-amber-50 text-amber-700" : tone === "red" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}><Icon size={18} /></span></div><strong className="mt-4 block text-3xl font-extrabold tracking-tight">{value}</strong><span className="mt-1 block text-xs text-[var(--ink-soft)]">{note}</span></article>)}</section>
+    {(lowProducts.length || outProducts.length) ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><div className="flex items-center justify-between"><div><h2 className="font-extrabold text-amber-950">Produits à réapprovisionner</h2><p className="mt-1 text-sm text-amber-800">{lowProducts.length} stock(s) faible(s) et {outProducts.length} rupture(s).</p></div><Link href="/produits" className="text-sm font-bold text-amber-950">Voir les produits</Link></div><div className="mt-4 flex flex-wrap gap-2">{[...outProducts, ...lowProducts].slice(0, 8).map(p => <Link key={p.id} href={`/produits/${p.id}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-amber-950">{p.name} · {Number(p.inventory?.quantity ?? 0)} {p.unit.symbol}</Link>)}</div></section> : null}
+    <DashboardCharts daily={daily} topProducts={topProducts} />
+    <section className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-extrabold">Mouvements récents</h2><p className="mt-1 text-sm text-[var(--ink-soft)]">Dernières opérations enregistrées</p></div><Link href="/historique" className="flex items-center gap-1 text-sm font-bold text-[var(--brand)]">Tout voir <ArrowRight size={16} /></Link></div><div className="mt-4 divide-y divide-[var(--line)]">{recentMovements.map(m => <div key={m.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_8rem_8rem]"><div><Link href={`/produits/${m.productId}`} className="font-extrabold">{m.product.name}</Link><p className="text-xs text-[var(--ink-soft)]">{m.user.name} · {new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(m.occurredAt)}</p></div><strong>{m.delta.greaterThan(0) ? "+" : ""}{Number(m.delta)} {m.product.unit.symbol}</strong><span className="text-[var(--ink-soft)]">{Number(m.stockBefore)} → {Number(m.stockAfter)}</span></div>)}{!recentMovements.length ? <p className="py-10 text-center text-sm text-[var(--ink-soft)]">Aucun mouvement pour le moment.</p> : null}</div></section>
+  </div>;
 }
