@@ -10,12 +10,13 @@ export type SettingsState = { error?: string; success?: string };
 const nameSchema = z.string().trim().min(2, "Le nom est trop court.").max(160);
 
 export async function createCategory(_: SettingsState, formData: FormData): Promise<SettingsState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = nameSchema.safeParse(formData.get("name"));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    await prisma.category.create({ data: { name: parsed.data } });
+    const item = await prisma.category.create({ data: { name: parsed.data } });
+    await prisma.auditLog.create({ data: { userId: user.id, action: "CATEGORY_CREATED", entityType: "Category", entityId: item.id } });
     revalidatePath("/parametres");
     return { success: "Catégorie ajoutée." };
   } catch {
@@ -24,7 +25,7 @@ export async function createCategory(_: SettingsState, formData: FormData): Prom
 }
 
 export async function createUnit(_: SettingsState, formData: FormData): Promise<SettingsState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const parsed = z.object({
     name: nameSchema,
     symbol: z.string().trim().min(1).max(20),
@@ -34,7 +35,8 @@ export async function createUnit(_: SettingsState, formData: FormData): Promise<
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    await prisma.unit.create({ data: parsed.data });
+    const item = await prisma.unit.create({ data: parsed.data });
+    await prisma.auditLog.create({ data: { userId: user.id, action: "UNIT_CREATED", entityType: "Unit", entityId: item.id } });
     revalidatePath("/parametres");
     return { success: "Unité ajoutée." };
   } catch {
@@ -43,7 +45,7 @@ export async function createUnit(_: SettingsState, formData: FormData): Promise<
 }
 
 export async function createSupplier(_: SettingsState, formData: FormData): Promise<SettingsState> {
-  await requireAdmin();
+  const user = await requireAdmin();
   const optionalText = z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(255).optional());
   const parsed = z.object({
     name: nameSchema,
@@ -54,7 +56,8 @@ export async function createSupplier(_: SettingsState, formData: FormData): Prom
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    await prisma.supplier.create({ data: parsed.data });
+    const item = await prisma.supplier.create({ data: parsed.data });
+    await prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: item.id } });
     revalidatePath("/parametres");
     return { success: "Fournisseur ajouté." };
   } catch {

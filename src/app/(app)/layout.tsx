@@ -1,11 +1,7 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import { AppShell } from "@/components/app-shell";
+import { requireUser } from "@/lib/permissions";
 
 export default async function PrivateLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-
-  if (!session?.user) redirect("/connexion");
-
-  return <AppShell user={session.user}>{children}</AppShell>;
+  const user = await requireUser();
+  return <AppShell user={user}>{children}</AppShell>;
 }

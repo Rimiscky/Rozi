@@ -31,13 +31,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user?.isActive) return null;
 
-        const passwordIsValid = await compare(parsed.data.password, user.passwordHash);
-        if (!passwordIsValid) return null;
+        const blockedUntil = new Date(Date.now() - 15 * 60 * 1000);
+        const recentFailures = await prisma.auditLog.count({ where: { userId: user.id, action: "LOGIN_FAILED", createdAt: { gte: blockedUntil } } });
+        if (recentFailures >= 5) return null;
 
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLoginAt: new Date() },
-        });
+        const passwordIsValid = await compare(parsed.data.password, user.passwordHash);
+        if (!passwordIsValid) {
+          await prisma.auditLog.create({ data: { userId: user.id, action: "LOGIN_FAILED", entityType: "User", entityId: user.id } });
+          return null;
+        }
+
+        await prisma.$transaction([
+          prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
+          prisma.auditLog.create({ data: { userId: user.id, action: "LOGIN_SUCCEEDED", entityType: "User", entityId: user.id } }),
+        ]);
 
         return {
           id: user.id,
@@ -64,9 +71,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.role as UserRole;
       return session;
     },
-    authorized({ auth: session, request }) {
+    async authorized({ auth: session, request }) {
       const isAuthenticated = Boolean(session?.user);
       const isLoginPage = request.nextUrl.pathname.startsWith("/connexion");
+
+      if (isAuthenticated) {
+        const currentUser = await prisma.user.findUnique({ where: { id: session!.user.id }, select: { isActive: true } });
+        if (!currentUser?.isActive) return isLoginPage;
+      }
 
       if (isLoginPage && isAuthenticated) {
         return Response.redirect(new URL("/tableau-de-bord", request.nextUrl));

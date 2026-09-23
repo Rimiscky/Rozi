@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BarChart3, ChevronRight, ClipboardList, Settings, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, ChevronRight, ClipboardList, KeyRound, Settings, SlidersHorizontal, Users } from "lucide-react";
 import { requireUser } from "@/lib/permissions";
 
 export default async function MenuPage() {
   const user = await requireUser();
   const links = [
+    { href: "/compte", label: "Mon compte", description: "Modifier mon mot de passe", icon: KeyRound },
     { href: "/historique", label: "Historique", description: "Rechercher et filtrer les mouvements", icon: ClipboardList },
     { href: "/rapports", label: "Rapports", description: "Analyser une période", icon: BarChart3 },
     ...(user.role === "ADMIN" ? [

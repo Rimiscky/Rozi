@@ -66,6 +66,7 @@ export async function createProduct(_: ProductState, formData: FormData): Promis
           comment: "Stock initial",
         } });
       }
+      await tx.auditLog.create({ data: { userId: user.id, action: "PRODUCT_CREATED", entityType: "Product", entityId: product.id } });
       return product.id;
     });
   } catch {
