@@ -10,6 +10,7 @@ import {
   Menu,
   PackagePlus,
   Settings,
+  SlidersHorizontal,
   Users,
 } from "lucide-react";
 import { signOut } from "@/auth";
@@ -24,6 +25,7 @@ const primaryNavigation = [
 ];
 
 const adminNavigation = [
+  { href: "/ajustements/nouveau", label: "Ajuster le stock", icon: SlidersHorizontal },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
