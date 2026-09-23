@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/permissions";
@@ -72,4 +73,43 @@ export async function createProduct(_: ProductState, formData: FormData): Promis
   }
 
   redirect(`/produits/${productId}`);
+}
+
+const updateSchema = schema.omit({ initialStock: true });
+
+export async function updateProduct(productId: string, _: ProductState, formData: FormData): Promise<ProductState> {
+  const user = await requireAdmin();
+  const raw = Object.fromEntries(formData.entries());
+  const parsed = updateSchema.safeParse(raw);
+  if (!parsed.success) return { error: parsed.error.issues[0].message, fields: raw as Record<string, string> };
+  const data = parsed.data;
+  try {
+    await prisma.$transaction([
+      prisma.product.update({ where: { id: productId }, data: {
+        name: data.name, sku: data.sku.toUpperCase(), categoryId: data.categoryId, unitId: data.unitId,
+        supplierId: data.supplierId ?? null, description: data.description ?? null,
+        alertThreshold: new Prisma.Decimal(data.alertThreshold.toString()),
+        purchasePriceMinor: data.purchasePrice === undefined ? null : Math.round(data.purchasePrice * 100),
+        salePriceMinor: data.salePrice === undefined ? null : Math.round(data.salePrice * 100),
+      } }),
+      prisma.auditLog.create({ data: { userId: user.id, action: "PRODUCT_UPDATED", entityType: "Product", entityId: productId } }),
+    ]);
+  } catch {
+    return { error: "Modification impossible. Vérifiez notamment que la référence est unique.", fields: raw as Record<string, string> };
+  }
+  revalidatePath(`/produits/${productId}`); revalidatePath("/produits");
+  redirect(`/produits/${productId}`);
+}
+
+export async function toggleProductStatus(formData: FormData) {
+  const user = await requireAdmin();
+  const productId = z.string().uuid().parse(formData.get("productId"));
+  const product = await prisma.product.findUnique({ where: { id: productId }, include: { inventory: true } });
+  if (!product) return;
+  if (product.isActive && Number(product.inventory?.quantity ?? 0) > 0) return;
+  await prisma.$transaction([
+    prisma.product.update({ where: { id: productId }, data: { isActive: !product.isActive } }),
+    prisma.auditLog.create({ data: { userId: user.id, action: product.isActive ? "PRODUCT_ARCHIVED" : "PRODUCT_REACTIVATED", entityType: "Product", entityId: productId } }),
+  ]);
+  revalidatePath(`/produits/${productId}`); revalidatePath("/produits");
 }

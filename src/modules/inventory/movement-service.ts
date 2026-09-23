@@ -20,12 +20,14 @@ type MovementInput = {
 
 export async function recordStockMovement(input: MovementInput) {
   return prisma.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<Array<{ quantity: Prisma.Decimal }>>`
-      SELECT quantity FROM inventories
-      WHERE "productId" = ${input.productId}::uuid
+    const rows = await tx.$queryRaw<Array<{ quantity: Prisma.Decimal; isActive: boolean }>>`
+      SELECT i.quantity, p."isActive" FROM inventories i
+      INNER JOIN products p ON p.id = i."productId"
+      WHERE i."productId" = ${input.productId}::uuid
       FOR UPDATE
     `;
     if (!rows[0]) throw new StockError("Inventaire introuvable pour ce produit.");
+    if (!rows[0].isActive) throw new StockError("Ce produit est archivé et ne peut plus recevoir de mouvement.");
 
     const { stockBefore, stockAfter, delta, quantity } = calculateStockChange({
       type: input.type,
