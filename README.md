@@ -52,6 +52,8 @@ Puis ouvrir `http://localhost:3000` et utiliser l’identifiant défini dans `IN
 - `npm run typecheck` : vérification TypeScript ;
 - `npm run build` : compilation de production.
 
+GitHub Actions exécute automatiquement ces vérifications à chaque push et pull request vers `main`.
+
 ## Règle de fiabilité
 
 Le stock courant n’est jamais modifié seul. Rozi verrouille l’inventaire du produit, calcule la nouvelle quantité, crée le mouvement et met à jour le stock dans une transaction PostgreSQL unique.

@@ -1,0 +1,49 @@
+name: Vérifications Rozi
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rozi-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Tests et compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://rozi:ci-password@127.0.0.1:5432/rozi
+      AUTH_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Installer les dépendances
+        run: npm install --no-audit --no-fund
+
+      - name: Générer Prisma
+        run: npm run db:generate
+
+      - name: Valider le schéma Prisma
+        run: npx prisma validate
+
+      - name: Exécuter les tests
+        run: npm test
+
+      - name: Vérifier TypeScript
+        run: npm run typecheck
+
+      - name: Compiler la production
+        run: npm run build
