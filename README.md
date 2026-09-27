@@ -72,15 +72,15 @@ GitHub Actions exécute automatiquement ces vérifications à chaque push et pul
 
 ## Démonstration sans données client
 
-Le dépôt ne contient aucune donnée réelle. Pour préparer une démonstration, utilisez une base PostgreSQL isolée, exécutez la migration puis le seed avec vos propres identifiants définis dans `.env`. Les catégories et unités créées sont génériques et fictives.
+Le dépôt ne contient aucune donnée réelle. Pour préparer une démonstration, utilisez une base PostgreSQL isolée, définissez `SEED_DEMO_DATA=true`, puis exécutez `npm run db:seed`. Le jeu idempotent ajoute trois références, un fournisseur et des mouvements explicitement fictifs.
 
 Une démonstration publique ne doit jamais réutiliser une sauvegarde client. Elle doit disposer de comptes et de références dédiés, d’un mot de passe renouvelé et d’une base réinitialisable.
 
 ## Limites actuelles
 
-- pas de gestion des bons de commande ni des réceptions partielles ;
-- pas d’import/export CSV ;
-- pas de test d’intégration PostgreSQL concurrent dans la CI ;
+- réception complète des bons de commande uniquement, sans réception partielle ;
+- import CSV en création uniquement, sans mise à jour en masse ;
+- pas encore de multi-entrepôt ni de lecture code-barres ;
 - pas de caisse, facturation, comptabilité ou synchronisation e-commerce ;
 - application mono-établissement pour le moment.
 

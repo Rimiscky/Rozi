@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { hash } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, UserRole } from "../src/generated/prisma/client";
+import { MovementReason, MovementType, PrismaClient, UserRole } from "../src/generated/prisma/client";
 
 function requiredEnvironmentVariable(name: string) {
   const value = process.env[name]?.trim();
@@ -65,6 +65,48 @@ async function main() {
       },
     }),
   ]);
+
+  if (process.env.SEED_DEMO_DATA === "true") await seedDemoData();
+}
+
+async function seedDemoData() {
+  const admin = await prisma.user.findUniqueOrThrow({ where: { username: adminUsername } });
+  const [visserie, ciment, electricite, piece, sac, metre] = await Promise.all([
+    prisma.category.findUniqueOrThrow({ where: { name: "Visserie" } }),
+    prisma.category.findUniqueOrThrow({ where: { name: "Ciment" } }),
+    prisma.category.findUniqueOrThrow({ where: { name: "Électricité" } }),
+    prisma.unit.findUniqueOrThrow({ where: { name: "pièce" } }),
+    prisma.unit.findUniqueOrThrow({ where: { name: "sac" } }),
+    prisma.unit.findUniqueOrThrow({ where: { name: "mètre" } }),
+  ]);
+  const supplier = await prisma.supplier.upsert({
+    where: { code: "DEMO-BATI" },
+    update: { isActive: true },
+    create: { code: "DEMO-BATI", name: "Fournitures Bâtiment Démo", contactName: "Contact fictif", email: "demo@example.invalid", paymentTermsDays: 30, leadTimeDays: 5 },
+  });
+  const fixtures = [
+    { sku: "DEMO-VIS-4X40", name: "Vis bois 4 × 40 mm", categoryId: visserie.id, unitId: piece.id, initial: 500, sold: 135, threshold: 150, purchase: 8, sale: 18 },
+    { sku: "DEMO-CIMENT-25", name: "Ciment 25 kg", categoryId: ciment.id, unitId: sac.id, initial: 60, sold: 26, threshold: 15, purchase: 690, sale: 990 },
+    { sku: "DEMO-CABLE-25", name: "Câble électrique 2,5 mm²", categoryId: electricite.id, unitId: metre.id, initial: 250, sold: 70, threshold: 60, purchase: 75, sale: 140 },
+  ];
+  for (const fixture of fixtures) {
+    const finalStock = fixture.initial - fixture.sold;
+    const product = await prisma.product.upsert({
+      where: { sku: fixture.sku },
+      update: { isActive: true },
+      create: { sku: fixture.sku, name: fixture.name, categoryId: fixture.categoryId, unitId: fixture.unitId, supplierId: supplier.id, alertThreshold: fixture.threshold, purchasePriceMinor: fixture.purchase, salePriceMinor: fixture.sale, createdById: admin.id, inventory: { create: { quantity: finalStock } } },
+      include: { inventory: true },
+    });
+    const existingMovements = await prisma.stockMovement.count({ where: { productId: product.id } });
+    if (!existingMovements) {
+      const receivedAt = new Date(); receivedAt.setDate(receivedAt.getDate() - 24);
+      const soldAt = new Date(); soldAt.setDate(soldAt.getDate() - 8);
+      await prisma.stockMovement.createMany({ data: [
+        { productId: product.id, userId: admin.id, supplierId: supplier.id, type: MovementType.IN, reason: MovementReason.INITIAL_STOCK, quantity: fixture.initial, delta: fixture.initial, stockBefore: 0, stockAfter: fixture.initial, occurredAt: receivedAt, reference: "DEMO-INITIAL", comment: "Donnée fictive de démonstration" },
+        { productId: product.id, userId: admin.id, type: MovementType.OUT, reason: MovementReason.SALE, quantity: fixture.sold, delta: -fixture.sold, stockBefore: fixture.initial, stockAfter: finalStock, occurredAt: soldAt, reference: "DEMO-VENTE", comment: "Donnée fictive de démonstration" },
+      ] });
+    }
+  }
 }
 
 main()
