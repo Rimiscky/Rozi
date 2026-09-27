@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "prisma generate",
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts"

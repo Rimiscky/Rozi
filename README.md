@@ -25,7 +25,7 @@ Les quincailleries gèrent souvent de nombreuses références vendues dans des u
 
 - **Next.js 16 et TypeScript** pour l’interface et les actions serveur ;
 - **PostgreSQL et Prisma** pour les contraintes, relations et transactions ;
-- verrou PostgreSQL `FOR UPDATE` et isolation `Serializable` pour protéger le stock ;
+- transaction atomique et verrou PostgreSQL `FOR UPDATE` pour sérialiser les mouvements d’un même produit ;
 - **Auth.js**, mots de passe bcrypt et contrôle des rôles côté serveur ;
 - tests Vitest, vérification TypeScript et compilation dans GitHub Actions.
 

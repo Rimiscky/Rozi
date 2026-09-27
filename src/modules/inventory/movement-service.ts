@@ -63,8 +63,5 @@ export async function recordStockMovementTx(tx: TransactionClient, input: Transa
 }
 
 export async function recordStockMovement(input: MovementInput) {
-  return prisma.$transaction(
-    (tx) => recordStockMovementTx(tx, input),
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-  );
+  return prisma.$transaction((tx) => recordStockMovementTx(tx, input));
 }
