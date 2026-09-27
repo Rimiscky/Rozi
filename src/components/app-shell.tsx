@@ -6,6 +6,7 @@ import {
   BarChart3,
   Boxes,
   ClipboardList,
+  FileSpreadsheet,
   LayoutDashboard,
   Menu,
   PackagePlus,
@@ -26,6 +27,7 @@ const primaryNavigation = [
 
 const adminNavigation = [
   { href: "/ajustements/nouveau", label: "Ajuster le stock", icon: SlidersHorizontal },
+  { href: "/imports", label: "Imports et exports", icon: FileSpreadsheet },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
