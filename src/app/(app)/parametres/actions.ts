@@ -48,16 +48,23 @@ export async function createSupplier(_: SettingsState, formData: FormData): Prom
   const user = await requireAdmin();
   const optionalText = z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(255).optional());
   const parsed = z.object({
+    code: z.string().trim().min(2).max(40).regex(/^[a-zA-Z0-9._-]+$/, "Code fournisseur invalide."),
     name: nameSchema,
+    contactName: optionalText,
     phone: optionalText,
     email: z.preprocess((value) => value === "" ? undefined : value, z.string().email("Adresse e-mail invalide.").optional()),
+    address: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(1000).optional()),
+    paymentTermsDays: z.coerce.number().int().min(0).max(365),
+    leadTimeDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().min(0).max(365).optional()),
   }).safeParse(Object.fromEntries(formData));
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.supplier.create({ data: parsed.data });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.supplier.create({ data: { ...parsed.data, code: parsed.data.code.toUpperCase() } });
+      await tx.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: item.id, metadata: { code: item.code } } });
+    });
     revalidatePath("/parametres");
     return { success: "Fournisseur ajouté." };
   } catch {
@@ -76,8 +83,8 @@ export async function updateUnit(formData: FormData) {
 }
 
 export async function updateSupplier(formData: FormData) {
-  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), name: nameSchema, phone: z.string().trim().max(40), email: z.string().trim().max(255) }).parse(Object.fromEntries(formData));
-  await prisma.$transaction([prisma.supplier.update({ where: { id: data.id }, data: { name: data.name, phone: data.phone || null, email: data.email || null } }), prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: data.id } })]); revalidatePath("/parametres");
+  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), code: z.string().trim().min(2).max(40).regex(/^[a-zA-Z0-9._-]+$/), name: nameSchema, contactName: z.string().trim().max(160), phone: z.string().trim().max(40), email: z.union([z.literal(""), z.string().email()]), address: z.string().trim().max(1000), paymentTermsDays: z.coerce.number().int().min(0).max(365), leadTimeDays: z.union([z.literal(""), z.coerce.number().int().min(0).max(365)]) }).parse(Object.fromEntries(formData));
+  await prisma.$transaction([prisma.supplier.update({ where: { id: data.id }, data: { code: data.code.toUpperCase(), name: data.name, contactName: data.contactName || null, phone: data.phone || null, email: data.email || null, address: data.address || null, paymentTermsDays: data.paymentTermsDays, leadTimeDays: data.leadTimeDays === "" ? null : data.leadTimeDays } }), prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: data.id } })]); revalidatePath("/parametres"); revalidatePath("/fournisseurs");
 }
 
 export async function toggleSetting(formData: FormData) {

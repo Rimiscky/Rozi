@@ -11,6 +11,7 @@ import {
   Menu,
   PackagePlus,
   Settings,
+  ShoppingCart,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -27,6 +28,7 @@ const primaryNavigation = [
 
 const adminNavigation = [
   { href: "/ajustements/nouveau", label: "Ajuster le stock", icon: SlidersHorizontal },
+  { href: "/bons-de-commande", label: "Bons de commande", icon: ShoppingCart },
   { href: "/imports", label: "Imports et exports", icon: FileSpreadsheet },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/parametres", label: "Paramètres", icon: Settings },

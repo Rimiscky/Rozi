@@ -37,8 +37,11 @@ export function UnitForm() {
 export function SupplierForm() {
   const [state, action, pending] = useActionState(createSupplier, initialState);
   return <form action={action} className="space-y-3">
-    <input name="name" className={inputClass} placeholder="Nom du fournisseur" required />
+    <div className="grid grid-cols-[7rem_1fr] gap-2"><input name="code" className={inputClass} placeholder="Code" required /><input name="name" className={inputClass} placeholder="Nom du fournisseur" required /></div>
+    <input name="contactName" className={inputClass} placeholder="Contact (facultatif)" />
     <div className="grid gap-2 sm:grid-cols-2"><input name="phone" className={inputClass} placeholder="Téléphone (facultatif)" /><input name="email" type="email" className={inputClass} placeholder="E-mail (facultatif)" /></div>
+    <input name="address" className={inputClass} placeholder="Adresse (facultatif)" />
+    <div className="grid grid-cols-2 gap-2"><label className="text-xs font-bold">Paiement (jours)<input name="paymentTermsDays" type="number" min="0" max="365" defaultValue="30" className={`${inputClass} mt-1`} /></label><label className="text-xs font-bold">Délai moyen (jours)<input name="leadTimeDays" type="number" min="0" max="365" className={`${inputClass} mt-1`} /></label></div>
     <Feedback state={state} />
     <button disabled={pending} className="min-h-11 w-full rounded-xl bg-[var(--ink)] px-4 text-sm font-bold text-white disabled:opacity-60">Ajouter le fournisseur</button>
   </form>;
