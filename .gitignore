@@ -4,6 +4,11 @@ out
 coverage
 .env
 .env.local
+.env.*.local
+.vercel
+.local/
+*.dump
+*.command
 *.log
 *.tsbuildinfo
 .DS_Store
