@@ -8,7 +8,7 @@ ALTER TABLE "suppliers"
   ADD COLUMN "paymentTermsDays" INTEGER NOT NULL DEFAULT 30,
   ADD COLUMN "leadTimeDays" INTEGER,
   ADD COLUMN "notes" TEXT;
-UPDATE "suppliers" SET "code" = 'SUP-' || UPPER(SUBSTRING("id"::text, 1, 8)) WHERE "code" IS NULL;
+UPDATE "suppliers" SET "code" = 'SUP-' || UPPER("id"::text) WHERE "code" IS NULL;
 ALTER TABLE "suppliers" ALTER COLUMN "code" SET NOT NULL;
 CREATE UNIQUE INDEX "suppliers_code_key" ON "suppliers"("code");
 ALTER TABLE "suppliers" ADD CONSTRAINT "suppliers_payment_terms_non_negative" CHECK ("paymentTermsDays" >= 0);
@@ -55,7 +55,7 @@ ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_supplierId_fkey" F
 ALTER TABLE "purchase_orders" ADD CONSTRAINT "purchase_orders_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "purchase_order_lines_purchaseOrderId_fkey" FOREIGN KEY ("purchaseOrderId") REFERENCES "purchase_orders"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "purchase_order_lines_productId_fkey" FOREIGN KEY ("productId") REFERENCES "products"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_purchaseOrderLineId_fkey" FOREIGN KEY ("purchaseOrderLineId") REFERENCES "purchase_order_lines"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_purchaseOrderLineId_fkey" FOREIGN KEY ("purchaseOrderLineId") REFERENCES "purchase_order_lines"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "purchase_order_lines_quantity_positive" CHECK ("quantity" > 0);
 ALTER TABLE "purchase_order_lines" ADD CONSTRAINT "purchase_order_lines_received_valid" CHECK ("receivedQuantity" >= 0 AND "receivedQuantity" <= "quantity");

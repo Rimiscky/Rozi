@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/permissions";
 import { recordStockMovementTx } from "@/modules/inventory/movement-service";
 
 export type PurchaseOrderState = { error?: string };
+class PurchaseOrderError extends Error {}
 
 export async function createPurchaseOrder(_: PurchaseOrderState, formData: FormData): Promise<PurchaseOrderState> {
   const admin = await requireAdmin();
@@ -29,32 +30,42 @@ export async function createPurchaseOrder(_: PurchaseOrderState, formData: FormD
   if (invalid && !invalid.success) return { error: invalid.error.issues[0].message };
   const lines = parsedLines.map((result) => result.success ? result.data : neverResult());
 
-  const [supplier, products] = await Promise.all([
-    prisma.supplier.findFirst({ where: { id: supplierId.data, isActive: true } }),
-    prisma.product.findMany({ where: { id: { in: productIds }, isActive: true }, include: { unit: true } }),
-  ]);
-  if (!supplier) return { error: "Ce fournisseur est introuvable ou inactif." };
-  if (products.length !== productIds.length) return { error: "Un produit est introuvable ou archivé." };
-
   const number = `BC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const order = await prisma.$transaction(async (tx) => {
-    const created = await tx.purchaseOrder.create({ data: {
-      number,
-      supplierId: supplier.id,
-      status: PurchaseOrderStatus.ORDERED,
-      orderedAt: new Date(),
-      expectedAt: expectedAtRaw ? new Date(`${expectedAtRaw}T12:00:00`) : null,
-      notes: notes || null,
-      createdById: admin.id,
-      lines: { create: lines.map((line, index) => {
-        const product = products.find((item) => item.id === line.productId)!;
-        return { position: index + 1, productId: product.id, quantity: new Prisma.Decimal(line.quantity.toString()), unitPriceMinor: line.unitPrice === "" ? null : Math.round(line.unitPrice * 100), productSkuSnapshot: product.sku, productNameSnapshot: product.name, unitSymbolSnapshot: product.unit.symbol };
-      }) },
-    } });
-    await tx.auditLog.create({ data: { userId: admin.id, action: "PURCHASE_ORDER_CREATED", entityType: "PurchaseOrder", entityId: created.id, metadata: { number, lineCount: lines.length } } });
-    return created;
-  });
-  redirect(`/bons-de-commande/${order.id}`);
+  let orderId: string;
+  try {
+    orderId = await prisma.$transaction(async (tx) => {
+      const supplierRows = await tx.$queryRaw<Array<{ id: string; isActive: boolean }>>`
+        SELECT id, "isActive" FROM suppliers WHERE id = ${supplierId.data}::uuid FOR UPDATE
+      `;
+      if (!supplierRows[0]?.isActive) throw new PurchaseOrderError("Ce fournisseur est introuvable ou inactif.");
+      for (const productId of [...productIds].sort()) {
+        const locked = await tx.$queryRaw<Array<{ isActive: boolean }>>`
+          SELECT "isActive" FROM products WHERE id = ${productId}::uuid FOR UPDATE
+        `;
+        if (!locked[0]?.isActive) throw new PurchaseOrderError("Un produit est introuvable ou archivé.");
+      }
+      const products = await tx.product.findMany({ where: { id: { in: productIds } }, include: { unit: true } });
+      if (products.length !== productIds.length) throw new PurchaseOrderError("Un produit est introuvable ou archivé.");
+      const created = await tx.purchaseOrder.create({ data: {
+        number,
+        supplierId: supplierId.data,
+        status: PurchaseOrderStatus.ORDERED,
+        orderedAt: new Date(),
+        expectedAt: expectedAtRaw ? new Date(`${expectedAtRaw}T12:00:00`) : null,
+        notes: notes || null,
+        createdById: admin.id,
+        lines: { create: lines.map((line, index) => {
+          const product = products.find((item) => item.id === line.productId)!;
+          return { position: index + 1, productId: product.id, quantity: new Prisma.Decimal(line.quantity.toString()), unitPriceMinor: line.unitPrice === "" ? null : Math.round(line.unitPrice * 100), productSkuSnapshot: product.sku, productNameSnapshot: product.name, unitSymbolSnapshot: product.unit.symbol };
+        }) },
+      } });
+      await tx.auditLog.create({ data: { userId: admin.id, action: "PURCHASE_ORDER_CREATED", entityType: "PurchaseOrder", entityId: created.id, metadata: { number, lineCount: lines.length } } });
+      return created.id;
+    });
+  } catch (error) {
+    return { error: error instanceof PurchaseOrderError ? error.message : "Le bon de commande n’a pas pu être créé." };
+  }
+  redirect(`/bons-de-commande/${orderId}`);
 }
 
 function neverResult(): never { throw new Error("Ligne invalide."); }

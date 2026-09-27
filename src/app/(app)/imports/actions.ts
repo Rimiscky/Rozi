@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/permissions";
-import { parseProductImport } from "@/modules/csv/csv";
+import { parseProductImport, ProductImportError } from "@/modules/csv/csv";
 
 export type ImportState = { error?: string; success?: string };
 
@@ -34,9 +34,9 @@ export async function importProducts(_: ImportState, formData: FormData): Promis
       const categoryId = categoryByName.get(row.category.toLocaleLowerCase("fr"));
       const unitId = unitByName.get(row.unit.toLocaleLowerCase("fr"));
       const supplierId = row.supplier ? supplierByName.get(row.supplier.toLocaleLowerCase("fr")) : undefined;
-      if (!categoryId) throw new Error(`Ligne ${index + 2} : catégorie « ${row.category} » inconnue ou inactive.`);
-      if (!unitId) throw new Error(`Ligne ${index + 2} : unité « ${row.unit} » inconnue ou inactive.`);
-      if (row.supplier && !supplierId) throw new Error(`Ligne ${index + 2} : fournisseur « ${row.supplier} » inconnu ou inactif.`);
+      if (!categoryId) throw new ProductImportError(`Ligne ${index + 2} : catégorie « ${row.category} » inconnue ou inactive.`);
+      if (!unitId) throw new ProductImportError(`Ligne ${index + 2} : unité « ${row.unit} » inconnue ou inactive.`);
+      if (row.supplier && !supplierId) throw new ProductImportError(`Ligne ${index + 2} : fournisseur « ${row.supplier} » inconnu ou inactif.`);
       return { row, categoryId, unitId, supplierId };
     });
 
@@ -61,6 +61,6 @@ export async function importProducts(_: ImportState, formData: FormData): Promis
     revalidatePath("/produits");
     return { success: `${rows.length} produit(s) importé(s). Le stock reste à zéro jusqu’à une entrée dédiée.` };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "L’import a échoué." };
+    return { error: error instanceof ProductImportError ? error.message : "L’import a échoué sans modifier le catalogue." };
   }
 }

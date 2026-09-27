@@ -16,7 +16,7 @@ export async function createEntry(_: EntryState, formData: FormData): Promise<En
     productId: z.string().uuid(), quantity: z.coerce.number().positive().max(999999999),
     supplierId: z.preprocess(v => v === "" ? undefined : v, z.string().uuid().optional()),
     reference: optionalReference, comment: optionalComment,
-    occurredAt: z.coerce.date().max(new Date(Date.now() + 86_400_000), "La date est invalide."),
+    occurredAt: z.coerce.date().max(new Date(), "La date ne peut pas être dans le futur."),
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 

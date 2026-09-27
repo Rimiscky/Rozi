@@ -17,7 +17,7 @@ export async function createExit(_: ExitState, formData: FormData): Promise<Exit
   const parsed = z.object({
     productId: z.string().uuid(), quantity: z.coerce.number().positive().max(999999999),
     reason: z.enum(["SALE", "INTERNAL_USE", "DAMAGED", "LOSS", "SUPPLIER_RETURN", "OTHER"]),
-    customerName: optionalCustomer, reference: optionalReference, comment: optionalComment, occurredAt: z.coerce.date().max(new Date(Date.now() + 86_400_000), "La date est invalide."),
+    customerName: optionalCustomer, reference: optionalReference, comment: optionalComment, occurredAt: z.coerce.date().max(new Date(), "La date ne peut pas être dans le futur."),
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {

@@ -95,9 +95,9 @@ export async function toggleSetting(formData: FormData) {
   const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity"));
   await prisma.$transaction(async (tx) => {
     let active: boolean | undefined;
-    if (entity === "Category") { const item = await tx.category.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.category.update({ where: { id }, data: { isActive: !item.isActive } }); }
-    if (entity === "Unit") { const item = await tx.unit.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.unit.update({ where: { id }, data: { isActive: !item.isActive } }); }
-    if (entity === "Supplier") { const item = await tx.supplier.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.supplier.update({ where: { id }, data: { isActive: !item.isActive } }); }
+    if (entity === "Category") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM categories WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.category.update({ where: { id }, data: { isActive: !active } }); }
+    if (entity === "Unit") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM units WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.unit.update({ where: { id }, data: { isActive: !active } }); }
+    if (entity === "Supplier") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM suppliers WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.supplier.update({ where: { id }, data: { isActive: !active } }); }
     if (active === undefined) return;
     await tx.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id, metadata: { before: { isActive: active }, after: { isActive: !active } } } });
   }); revalidatePath("/parametres");

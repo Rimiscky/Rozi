@@ -7,7 +7,7 @@ export async function GET() {
   if ("error" in access) return access.error;
   const products = await prisma.product.findMany({
     orderBy: { name: "asc" },
-    include: { category: true, unit: true, supplier: true, inventory: true },
+    include: { category: true, unit: true, supplier: true },
   });
   const csv = exportProductsCsv(products.map((product) => ({
     sku: product.sku,
@@ -15,8 +15,9 @@ export async function GET() {
     category: product.category.name,
     unit: product.unit.name,
     supplier: product.supplier?.name ?? "",
-    quantity: product.inventory?.quantity.toString() ?? "0",
     alertThreshold: product.alertThreshold.toString(),
+    purchasePrice: product.purchasePriceMinor === null ? "" : (product.purchasePriceMinor / 100).toFixed(2),
+    salePrice: product.salePriceMinor === null ? "" : (product.salePriceMinor / 100).toFixed(2),
   })));
   return new Response(csv, {
     headers: {

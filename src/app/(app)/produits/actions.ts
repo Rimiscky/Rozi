@@ -116,6 +116,10 @@ export async function toggleProductStatus(formData: FormData) {
     const product = rows[0];
     if (!product) return;
     if (product.isActive && product.quantity.greaterThan(0)) return;
+    if (product.isActive) {
+      const openOrder = await tx.purchaseOrderLine.findFirst({ where: { productId, purchaseOrder: { status: "ORDERED" } }, select: { id: true } });
+      if (openOrder) return;
+    }
     const targetActive = !product.isActive;
     await tx.product.update({ where: { id: productId }, data: { isActive: targetActive } });
     await tx.auditLog.create({ data: { userId: user.id, action: targetActive ? "PRODUCT_REACTIVATED" : "PRODUCT_ARCHIVED", entityType: "Product", entityId: productId, metadata: { before: { isActive: product.isActive }, after: { isActive: targetActive } } } });

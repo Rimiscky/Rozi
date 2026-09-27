@@ -53,4 +53,13 @@ describe("concurrence des mouvements PostgreSQL", () => {
     await assertLedger(product.id, 20);
     expect(await prisma.stockMovement.count({ where: { productId: product.id } })).toBe(20);
   });
+
+  it("rend les journaux immuables et refuse un mouvement incohérent", async () => {
+    const product = await createProduct(2);
+    const movement = await prisma.stockMovement.findFirstOrThrow({ where: { productId: product.id } });
+    await expect(prisma.$executeRaw`UPDATE stock_movements SET comment = 'altéré' WHERE id = ${movement.id}::uuid`).rejects.toThrow(/append-only/);
+    await expect(prisma.$executeRaw`DELETE FROM stock_movements WHERE id = ${movement.id}::uuid`).rejects.toThrow(/append-only/);
+    await expect(prisma.$executeRaw`TRUNCATE TABLE audit_logs`).rejects.toThrow(/append-only/);
+    await expect(prisma.stockMovement.create({ data: { productId: product.id, userId, type: MovementType.IN, reason: MovementReason.OTHER, quantity: 1, delta: -1, stockBefore: 2, stockAfter: 1, occurredAt: new Date() } })).rejects.toThrow();
+  });
 });

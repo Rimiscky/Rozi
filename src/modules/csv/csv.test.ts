@@ -3,12 +3,17 @@ import { exportProductsCsv, parseProductImport } from "./csv";
 
 describe("exports CSV", () => {
   it("neutralise les formules tableur et produit un CSV Excel en UTF-8", () => {
-    const output = exportProductsCsv([{ sku: "=CMD", name: "+Produit", category: "Outillage", unit: "pce", supplier: "@Fournisseur", quantity: "2", alertThreshold: "1" }]);
+    const output = exportProductsCsv([{ sku: "=CMD", name: "+Produit", category: "Outillage", unit: "pce", supplier: "@Fournisseur", alertThreshold: "1", purchasePrice: "1.00", salePrice: "2.00" }]);
 
     expect(output.startsWith("\uFEFF")).toBe(true);
     expect(output).toContain("'=CMD");
     expect(output).toContain("'+Produit");
     expect(output).toContain("'@Fournisseur");
+  });
+
+  it("produit un catalogue qui peut être réimporté", () => {
+    const output = exportProductsCsv([{ sku: "VIS-001", name: "Vis bois", category: "Visserie", unit: "pièce", supplier: "Fournisseur démo", alertThreshold: "10", purchasePrice: "0.12", salePrice: "0.25" }]);
+    expect(parseProductImport(output)).toEqual([{ sku: "VIS-001", name: "Vis bois", category: "Visserie", unit: "pièce", supplier: "Fournisseur démo", alertThreshold: 10, purchasePriceMinor: 12, salePriceMinor: 25 }]);
   });
 });
 

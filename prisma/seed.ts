@@ -79,6 +79,10 @@ async function seedDemoData() {
     prisma.unit.findUniqueOrThrow({ where: { name: "sac" } }),
     prisma.unit.findUniqueOrThrow({ where: { name: "mètre" } }),
   ]);
+  const existingSupplier = await prisma.supplier.findUnique({ where: { code: "DEMO-BATI" } });
+  if (existingSupplier && existingSupplier.email !== "demo@example.invalid") {
+    throw new Error("Le code fournisseur DEMO-BATI existe déjà et n’appartient pas au jeu de démonstration.");
+  }
   const supplier = await prisma.supplier.upsert({
     where: { code: "DEMO-BATI" },
     update: { isActive: true },
@@ -90,22 +94,27 @@ async function seedDemoData() {
     { sku: "DEMO-CABLE-25", name: "Câble électrique 2,5 mm²", categoryId: electricite.id, unitId: metre.id, initial: 250, sold: 70, threshold: 60, purchase: 75, sale: 140 },
   ];
   for (const fixture of fixtures) {
-    const finalStock = fixture.initial - fixture.sold;
-    const product = await prisma.product.upsert({
-      where: { sku: fixture.sku },
-      update: { isActive: true },
-      create: { sku: fixture.sku, name: fixture.name, categoryId: fixture.categoryId, unitId: fixture.unitId, supplierId: supplier.id, alertThreshold: fixture.threshold, purchasePriceMinor: fixture.purchase, salePriceMinor: fixture.sale, createdById: admin.id, inventory: { create: { quantity: finalStock } } },
-      include: { inventory: true },
-    });
-    const existingMovements = await prisma.stockMovement.count({ where: { productId: product.id } });
-    if (!existingMovements) {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.product.findUnique({ where: { sku: fixture.sku }, include: { inventory: true } });
+      if (existing) {
+        const foreignMovement = await tx.stockMovement.findFirst({ where: { productId: existing.id, OR: [{ reference: null }, { NOT: { reference: { startsWith: "DEMO-" } } }] }, select: { id: true } });
+        const demoMovementCount = await tx.stockMovement.count({ where: { productId: existing.id, reference: { startsWith: "DEMO-" } } });
+        if (!existing.inventory || foreignMovement || demoMovementCount !== 2 || existing.name !== fixture.name) {
+          throw new Error(`La référence ${fixture.sku} existe déjà et n’appartient pas au jeu de démonstration.`);
+        }
+        return;
+      }
+      const finalStock = fixture.initial - fixture.sold;
+      const product = await tx.product.create({
+        data: { sku: fixture.sku, name: fixture.name, categoryId: fixture.categoryId, unitId: fixture.unitId, supplierId: supplier.id, alertThreshold: fixture.threshold, purchasePriceMinor: fixture.purchase, salePriceMinor: fixture.sale, createdById: admin.id, inventory: { create: { quantity: finalStock } } },
+      });
       const receivedAt = new Date(); receivedAt.setDate(receivedAt.getDate() - 24);
       const soldAt = new Date(); soldAt.setDate(soldAt.getDate() - 8);
-      await prisma.stockMovement.createMany({ data: [
+      await tx.stockMovement.createMany({ data: [
         { productId: product.id, userId: admin.id, supplierId: supplier.id, type: MovementType.IN, reason: MovementReason.INITIAL_STOCK, quantity: fixture.initial, delta: fixture.initial, stockBefore: 0, stockAfter: fixture.initial, occurredAt: receivedAt, reference: "DEMO-INITIAL", comment: "Donnée fictive de démonstration" },
         { productId: product.id, userId: admin.id, type: MovementType.OUT, reason: MovementReason.SALE, quantity: fixture.sold, delta: -fixture.sold, stockBefore: fixture.initial, stockAfter: finalStock, occurredAt: soldAt, reference: "DEMO-VENTE", comment: "Donnée fictive de démonstration" },
       ] });
-    }
+    });
   }
 }
 

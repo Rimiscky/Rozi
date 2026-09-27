@@ -11,9 +11,12 @@ export type ProductCsvRow = {
   category: string;
   unit: string;
   supplier: string;
-  quantity: string;
   alertThreshold: string;
+  purchasePrice: string;
+  salePrice: string;
 };
+
+export class ProductImportError extends Error {}
 
 export type ProductImportRow = {
   sku: string;
@@ -45,8 +48,9 @@ export function exportProductsCsv(rows: ProductCsvRow[]) {
     category: safeSpreadsheetCell(row.category),
     unit: safeSpreadsheetCell(row.unit),
     supplier: safeSpreadsheetCell(row.supplier),
-    quantity: row.quantity,
     alert_threshold: row.alertThreshold,
+    purchase_price: row.purchasePrice,
+    sale_price: row.salePrice,
   }));
 
   return `\uFEFF${stringify(records, { header: true, delimiter: ";", quoted: true })}`;
@@ -60,18 +64,23 @@ export function exportMovementsCsv(rows: Array<Record<string, string>>) {
 }
 
 export function parseProductImport(content: string): ProductImportRow[] {
-  const records = parse(content.replace(/^\uFEFF/, ""), {
-    bom: true,
-    columns: true,
-    delimiter: ";",
-    skip_empty_lines: true,
-    trim: true,
-  }) as Record<string, string>[];
+  let records: Record<string, string>[];
+  try {
+    records = parse(content.replace(/^\uFEFF/, ""), {
+      bom: true,
+      columns: true,
+      delimiter: ";",
+      skip_empty_lines: true,
+      trim: true,
+    }) as Record<string, string>[];
+  } catch {
+    throw new ProductImportError("Le fichier CSV est illisible.");
+  }
 
-  if (records.length > MAX_ROWS) throw new Error("Un import est limité à 5 000 lignes.");
+  if (records.length > MAX_ROWS) throw new ProductImportError("Un import est limité à 5 000 lignes.");
   const headers = records.length ? Object.keys(records[0]) : [];
   if (headers.length !== PRODUCT_HEADERS.length || PRODUCT_HEADERS.some((header) => !headers.includes(header))) {
-    throw new Error(`Les en-têtes attendus sont : ${PRODUCT_HEADERS.join(";")}.`);
+    throw new ProductImportError(`Les en-têtes attendus sont : ${PRODUCT_HEADERS.join(";")}.`);
   }
 
   const rowSchema = z.object({
@@ -87,16 +96,20 @@ export function parseProductImport(content: string): ProductImportRow[] {
 
   return records.map((record, index) => {
     const parsed = rowSchema.safeParse(record);
-    if (!parsed.success) throw new Error(`Ligne ${index + 2} invalide : ${parsed.error.issues[0].message}`);
-    return {
-      sku: parsed.data.sku.toUpperCase(),
-      name: parsed.data.name,
-      category: parsed.data.category,
-      unit: parsed.data.unit,
-      supplier: parsed.data.supplier || undefined,
-      alertThreshold: parsed.data.alert_threshold,
-      purchasePriceMinor: euroToMinor(parsed.data.purchase_price),
-      salePriceMinor: euroToMinor(parsed.data.sale_price),
-    };
+    if (!parsed.success) throw new ProductImportError(`Ligne ${index + 2} invalide : ${parsed.error.issues[0].message}`);
+    try {
+      return {
+        sku: parsed.data.sku.toUpperCase(),
+        name: parsed.data.name,
+        category: parsed.data.category,
+        unit: parsed.data.unit,
+        supplier: parsed.data.supplier || undefined,
+        alertThreshold: parsed.data.alert_threshold,
+        purchasePriceMinor: euroToMinor(parsed.data.purchase_price),
+        salePriceMinor: euroToMinor(parsed.data.sale_price),
+      };
+    } catch {
+      throw new ProductImportError(`Ligne ${index + 2} invalide : prix incorrect.`);
+    }
   });
 }
