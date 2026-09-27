@@ -14,8 +14,11 @@ export async function createUser(_: UserState, formData: FormData): Promise<User
   const parsed = z.object({ name: z.string().trim().min(2).max(160), username: z.string().trim().min(2).max(80).regex(/^[a-zA-Z0-9._-]+$/, "Identifiant invalide."), password: z.string().min(12, "Le mot de passe doit contenir au moins 12 caractères.").max(128), role: z.enum(["ADMIN", "EMPLOYEE"]) }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {
-    const created = await prisma.user.create({ data: { name: parsed.data.name, username: parsed.data.username.toLowerCase(), passwordHash: await hash(parsed.data.password, 12), role: parsed.data.role as UserRole } });
-    await prisma.auditLog.create({ data: { userId: admin.id, action: "USER_CREATED", entityType: "User", entityId: created.id, metadata: { role: created.role } } });
+    const passwordHash = await hash(parsed.data.password, 12);
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({ data: { name: parsed.data.name, username: parsed.data.username.toLowerCase(), passwordHash, role: parsed.data.role as UserRole } });
+      await tx.auditLog.create({ data: { userId: admin.id, action: "USER_CREATED", entityType: "User", entityId: created.id, metadata: { role: created.role } } });
+    });
     revalidatePath("/utilisateurs"); return { success: "Compte créé avec succès." };
   } catch { return { error: "Cet identifiant est déjà utilisé." }; }
 }

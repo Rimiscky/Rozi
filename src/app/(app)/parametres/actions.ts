@@ -15,8 +15,10 @@ export async function createCategory(_: SettingsState, formData: FormData): Prom
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.category.create({ data: { name: parsed.data } });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "CATEGORY_CREATED", entityType: "Category", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.category.create({ data: { name: parsed.data } });
+      await tx.auditLog.create({ data: { userId: user.id, action: "CATEGORY_CREATED", entityType: "Category", entityId: item.id } });
+    });
     revalidatePath("/parametres");
     return { success: "Catégorie ajoutée." };
   } catch {
@@ -35,8 +37,10 @@ export async function createUnit(_: SettingsState, formData: FormData): Promise<
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.unit.create({ data: parsed.data });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "UNIT_CREATED", entityType: "Unit", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.unit.create({ data: parsed.data });
+      await tx.auditLog.create({ data: { userId: user.id, action: "UNIT_CREATED", entityType: "Unit", entityId: item.id } });
+    });
     revalidatePath("/parametres");
     return { success: "Unité ajoutée." };
   } catch {
@@ -88,9 +92,13 @@ export async function updateSupplier(formData: FormData) {
 }
 
 export async function toggleSetting(formData: FormData) {
-  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity")); const active = formData.get("active") === "true";
-  if (entity === "Category") await prisma.category.update({ where: { id }, data: { isActive: !active } });
-  if (entity === "Unit") await prisma.unit.update({ where: { id }, data: { isActive: !active } });
-  if (entity === "Supplier") await prisma.supplier.update({ where: { id }, data: { isActive: !active } });
-  await prisma.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id } }); revalidatePath("/parametres");
+  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity"));
+  await prisma.$transaction(async (tx) => {
+    let active: boolean | undefined;
+    if (entity === "Category") { const item = await tx.category.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.category.update({ where: { id }, data: { isActive: !item.isActive } }); }
+    if (entity === "Unit") { const item = await tx.unit.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.unit.update({ where: { id }, data: { isActive: !item.isActive } }); }
+    if (entity === "Supplier") { const item = await tx.supplier.findUnique({ where: { id }, select: { isActive: true } }); active = item?.isActive; if (item) await tx.supplier.update({ where: { id }, data: { isActive: !item.isActive } }); }
+    if (active === undefined) return;
+    await tx.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id, metadata: { before: { isActive: active }, after: { isActive: !active } } } });
+  }); revalidatePath("/parametres");
 }
