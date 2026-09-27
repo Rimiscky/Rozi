@@ -38,6 +38,8 @@ L’architecture, le modèle de données et les limites sont détaillés dans [`
 
 ## Installation locale
 
+Pour publier sur `rosy.rimiscky.fr`, consulter le [guide de déploiement](docs/DEPLOIEMENT.md). Un dossier web seul ne suffit pas : l'hébergement doit exécuter Node.js et accéder à PostgreSQL.
+
 1. Installer les dépendances verrouillées :
 
    `npm ci`
@@ -48,7 +50,9 @@ L’architecture, le modèle de données et les limites sont détaillés dans [`
 
    `docker compose up -d postgres`
 
-4. Créer les tables et contraintes :
+4. Générer le client Prisma, puis créer les tables et contraintes :
+
+   `npm run db:generate`
 
    `npx prisma migrate deploy`
 
