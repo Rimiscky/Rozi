@@ -172,6 +172,7 @@ model StockMovement {
   purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id], onDelete: SetNull)
 
   @@index([productId, occurredAt(sort: Desc)])
+  @@index([productId, type, occurredAt(sort: Desc)])
   @@index([type, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
   @@index([occurredAt(sort: Desc)])
