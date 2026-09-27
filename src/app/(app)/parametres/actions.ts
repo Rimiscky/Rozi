@@ -15,8 +15,10 @@ export async function createCategory(_: SettingsState, formData: FormData): Prom
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.category.create({ data: { name: parsed.data } });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "CATEGORY_CREATED", entityType: "Category", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.category.create({ data: { name: parsed.data } });
+      await tx.auditLog.create({ data: { userId: user.id, action: "CATEGORY_CREATED", entityType: "Category", entityId: item.id } });
+    });
     revalidatePath("/parametres");
     return { success: "Catégorie ajoutée." };
   } catch {
@@ -35,8 +37,10 @@ export async function createUnit(_: SettingsState, formData: FormData): Promise<
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.unit.create({ data: parsed.data });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "UNIT_CREATED", entityType: "Unit", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.unit.create({ data: parsed.data });
+      await tx.auditLog.create({ data: { userId: user.id, action: "UNIT_CREATED", entityType: "Unit", entityId: item.id } });
+    });
     revalidatePath("/parametres");
     return { success: "Unité ajoutée." };
   } catch {
@@ -48,16 +52,23 @@ export async function createSupplier(_: SettingsState, formData: FormData): Prom
   const user = await requireAdmin();
   const optionalText = z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(255).optional());
   const parsed = z.object({
+    code: z.string().trim().min(2).max(40).regex(/^[a-zA-Z0-9._-]+$/, "Code fournisseur invalide."),
     name: nameSchema,
+    contactName: optionalText,
     phone: optionalText,
     email: z.preprocess((value) => value === "" ? undefined : value, z.string().email("Adresse e-mail invalide.").optional()),
+    address: z.preprocess((value) => value === "" ? undefined : value, z.string().trim().max(1000).optional()),
+    paymentTermsDays: z.coerce.number().int().min(0).max(365),
+    leadTimeDays: z.preprocess((value) => value === "" ? undefined : value, z.coerce.number().int().min(0).max(365).optional()),
   }).safeParse(Object.fromEntries(formData));
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
-    const item = await prisma.supplier.create({ data: parsed.data });
-    await prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: item.id } });
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.supplier.create({ data: { ...parsed.data, code: parsed.data.code.toUpperCase() } });
+      await tx.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_CREATED", entityType: "Supplier", entityId: item.id, metadata: { code: item.code } } });
+    });
     revalidatePath("/parametres");
     return { success: "Fournisseur ajouté." };
   } catch {
@@ -76,14 +87,18 @@ export async function updateUnit(formData: FormData) {
 }
 
 export async function updateSupplier(formData: FormData) {
-  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), name: nameSchema, phone: z.string().trim().max(40), email: z.string().trim().max(255) }).parse(Object.fromEntries(formData));
-  await prisma.$transaction([prisma.supplier.update({ where: { id: data.id }, data: { name: data.name, phone: data.phone || null, email: data.email || null } }), prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: data.id } })]); revalidatePath("/parametres");
+  const user = await requireAdmin(); const data = z.object({ id: z.string().uuid(), code: z.string().trim().min(2).max(40).regex(/^[a-zA-Z0-9._-]+$/), name: nameSchema, contactName: z.string().trim().max(160), phone: z.string().trim().max(40), email: z.union([z.literal(""), z.string().email()]), address: z.string().trim().max(1000), paymentTermsDays: z.coerce.number().int().min(0).max(365), leadTimeDays: z.union([z.literal(""), z.coerce.number().int().min(0).max(365)]) }).parse(Object.fromEntries(formData));
+  await prisma.$transaction([prisma.supplier.update({ where: { id: data.id }, data: { code: data.code.toUpperCase(), name: data.name, contactName: data.contactName || null, phone: data.phone || null, email: data.email || null, address: data.address || null, paymentTermsDays: data.paymentTermsDays, leadTimeDays: data.leadTimeDays === "" ? null : data.leadTimeDays } }), prisma.auditLog.create({ data: { userId: user.id, action: "SUPPLIER_UPDATED", entityType: "Supplier", entityId: data.id } })]); revalidatePath("/parametres"); revalidatePath("/fournisseurs");
 }
 
 export async function toggleSetting(formData: FormData) {
-  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity")); const active = formData.get("active") === "true";
-  if (entity === "Category") await prisma.category.update({ where: { id }, data: { isActive: !active } });
-  if (entity === "Unit") await prisma.unit.update({ where: { id }, data: { isActive: !active } });
-  if (entity === "Supplier") await prisma.supplier.update({ where: { id }, data: { isActive: !active } });
-  await prisma.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id } }); revalidatePath("/parametres");
+  const user = await requireAdmin(); const id = z.string().uuid().parse(formData.get("id")); const entity = z.enum(["Category", "Unit", "Supplier"]).parse(formData.get("entity"));
+  await prisma.$transaction(async (tx) => {
+    let active: boolean | undefined;
+    if (entity === "Category") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM categories WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.category.update({ where: { id }, data: { isActive: !active } }); }
+    if (entity === "Unit") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM units WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.unit.update({ where: { id }, data: { isActive: !active } }); }
+    if (entity === "Supplier") { const rows = await tx.$queryRaw<Array<{ isActive: boolean }>>`SELECT "isActive" FROM suppliers WHERE id = ${id}::uuid FOR UPDATE`; active = rows[0]?.isActive; if (active !== undefined) await tx.supplier.update({ where: { id }, data: { isActive: !active } }); }
+    if (active === undefined) return;
+    await tx.auditLog.create({ data: { userId: user.id, action: active ? `${entity.toUpperCase()}_DISABLED` : `${entity.toUpperCase()}_ENABLED`, entityType: entity, entityId: id, metadata: { before: { isActive: active }, after: { isActive: !active } } } });
+  }); revalidatePath("/parametres");
 }

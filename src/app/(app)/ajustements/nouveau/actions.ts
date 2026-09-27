@@ -12,7 +12,7 @@ export async function createAdjustment(_: AdjustmentState, formData: FormData): 
   const user = await requireAdmin();
   const parsed = z.object({
     productId: z.string().uuid(), countedQuantity: z.coerce.number().min(0).max(999999999),
-    comment: z.string().trim().min(5, "Expliquez la raison de la correction.").max(500), occurredAt: z.coerce.date(),
+    comment: z.string().trim().min(5, "Expliquez la raison de la correction.").max(2000), occurredAt: z.coerce.date().max(new Date(), "La date ne peut pas être dans le futur."),
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {

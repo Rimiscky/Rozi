@@ -30,6 +30,13 @@ enum MovementReason {
   OTHER
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
 model User {
   id              String          @id @default(uuid()) @db.Uuid
   username        String          @unique @db.VarChar(80)
@@ -44,6 +51,7 @@ model User {
   movements       StockMovement[]
   auditLogs       AuditLog[]
   createdProducts Product[]       @relation("ProductCreator")
+  purchaseOrders  PurchaseOrder[] @relation("PurchaseOrderCreator")
 
   @@index([role, isActive])
   @@map("users")
@@ -77,45 +85,52 @@ model Unit {
 }
 
 model Supplier {
-  id        String          @id @default(uuid()) @db.Uuid
-  name      String          @unique @db.VarChar(160)
-  phone     String?         @db.VarChar(40)
-  email     String?         @db.VarChar(255)
-  address   String?
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  products  Product[]
-  movements StockMovement[]
+  id               String          @id @default(uuid()) @db.Uuid
+  code             String          @unique @db.VarChar(40)
+  name             String          @unique @db.VarChar(160)
+  contactName      String?         @db.VarChar(160)
+  phone            String?         @db.VarChar(40)
+  email            String?         @db.VarChar(255)
+  address          String?
+  paymentTermsDays Int             @default(30)
+  leadTimeDays     Int?
+  notes            String?
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  products         Product[]
+  movements        StockMovement[]
+  purchaseOrders   PurchaseOrder[]
 
   @@index([isActive])
   @@map("suppliers")
 }
 
 model Product {
-  id                 String          @id @default(uuid()) @db.Uuid
-  name               String          @db.VarChar(180)
-  sku                String          @unique @db.VarChar(80)
-  barcode            String?         @unique @db.VarChar(100)
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String              @db.VarChar(180)
+  sku                String              @unique @db.VarChar(80)
+  barcode            String?             @unique @db.VarChar(100)
   description        String?
   imageUrl           String?
-  alertThreshold     Decimal         @default(0) @db.Decimal(18, 3)
+  alertThreshold     Decimal             @default(0) @db.Decimal(18, 3)
   purchasePriceMinor Int?
   salePriceMinor     Int?
-  currency           String          @default("EUR") @db.Char(3)
-  isActive           Boolean         @default(true)
-  categoryId         String          @db.Uuid
-  unitId             String          @db.Uuid
-  supplierId         String?         @db.Uuid
-  createdById        String          @db.Uuid
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  category           Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  unit               Unit            @relation(fields: [unitId], references: [id], onDelete: Restrict)
-  supplier           Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  createdBy          User            @relation("ProductCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  currency           String              @default("EUR") @db.Char(3)
+  isActive           Boolean             @default(true)
+  categoryId         String              @db.Uuid
+  unitId             String              @db.Uuid
+  supplierId         String?             @db.Uuid
+  createdById        String              @db.Uuid
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  unit               Unit                @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  supplier           Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  createdBy          User                @relation("ProductCreator", fields: [createdById], references: [id], onDelete: Restrict)
   inventory          Inventory?
   movements          StockMovement[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@index([name])
   @@index([categoryId, isActive])
@@ -135,30 +150,73 @@ model Inventory {
 }
 
 model StockMovement {
-  id           String         @id @default(uuid()) @db.Uuid
-  productId    String         @db.Uuid
-  userId       String         @db.Uuid
-  supplierId   String?        @db.Uuid
-  type         MovementType
-  reason       MovementReason
-  quantity     Decimal        @db.Decimal(18, 3)
-  delta        Decimal        @db.Decimal(18, 3)
-  stockBefore  Decimal        @db.Decimal(18, 3)
-  stockAfter   Decimal        @db.Decimal(18, 3)
-  reference    String?        @db.VarChar(120)
-  customerName String?        @db.VarChar(160)
-  comment      String?
-  occurredAt   DateTime
-  createdAt    DateTime       @default(now())
-  product      Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
-  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
-  supplier     Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  id                  String             @id @default(uuid()) @db.Uuid
+  productId           String             @db.Uuid
+  userId              String             @db.Uuid
+  supplierId          String?            @db.Uuid
+  purchaseOrderLineId String?            @unique @db.Uuid
+  type                MovementType
+  reason              MovementReason
+  quantity            Decimal            @db.Decimal(18, 3)
+  delta               Decimal            @db.Decimal(18, 3)
+  stockBefore         Decimal            @db.Decimal(18, 3)
+  stockAfter          Decimal            @db.Decimal(18, 3)
+  reference           String?            @db.VarChar(120)
+  customerName        String?            @db.VarChar(160)
+  comment             String?
+  occurredAt          DateTime
+  createdAt           DateTime           @default(now())
+  product             Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  supplier            Supplier?          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchaseOrderLine   PurchaseOrderLine? @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
 
   @@index([productId, occurredAt(sort: Desc)])
+  @@index([productId, type, occurredAt(sort: Desc)])
   @@index([type, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
   @@index([occurredAt(sort: Desc)])
   @@map("stock_movements")
+}
+
+model PurchaseOrder {
+  id          String              @id @default(uuid()) @db.Uuid
+  number      String              @unique @db.VarChar(40)
+  supplierId  String              @db.Uuid
+  status      PurchaseOrderStatus @default(DRAFT)
+  orderedAt   DateTime?
+  expectedAt  DateTime?
+  notes       String?
+  createdById String              @db.Uuid
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  supplier    Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy   User                @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lines       PurchaseOrderLine[]
+
+  @@index([status, expectedAt])
+  @@index([supplierId, createdAt(sort: Desc)])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id                  String         @id @default(uuid()) @db.Uuid
+  purchaseOrderId     String         @db.Uuid
+  productId           String         @db.Uuid
+  position            Int
+  quantity            Decimal        @db.Decimal(18, 3)
+  receivedQuantity    Decimal        @default(0) @db.Decimal(18, 3)
+  unitPriceMinor      Int?
+  productSkuSnapshot  String         @db.VarChar(80)
+  productNameSnapshot String         @db.VarChar(180)
+  unitSymbolSnapshot  String         @db.VarChar(20)
+  purchaseOrder       PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  product             Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  stockMovement       StockMovement?
+
+  @@unique([purchaseOrderId, position])
+  @@index([productId])
+  @@map("purchase_order_lines")
 }
 
 model AuditLog {
@@ -169,7 +227,7 @@ model AuditLog {
   entityId   String?  @db.Uuid
   metadata   Json?
   createdAt  DateTime @default(now())
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([entityType, entityId])
   @@index([createdAt(sort: Desc)])

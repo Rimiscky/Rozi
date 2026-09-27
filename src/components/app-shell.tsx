@@ -6,10 +6,13 @@ import {
   BarChart3,
   Boxes,
   ClipboardList,
+  FileSpreadsheet,
   LayoutDashboard,
   Menu,
   PackagePlus,
   Settings,
+  ShieldCheck,
+  ShoppingCart,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -26,6 +29,9 @@ const primaryNavigation = [
 
 const adminNavigation = [
   { href: "/ajustements/nouveau", label: "Ajuster le stock", icon: SlidersHorizontal },
+  { href: "/bons-de-commande", label: "Bons de commande", icon: ShoppingCart },
+  { href: "/imports", label: "Imports et exports", icon: FileSpreadsheet },
+  { href: "/journal-audit", label: "Journal d’audit", icon: ShieldCheck },
   { href: "/utilisateurs", label: "Utilisateurs", icon: Users },
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];

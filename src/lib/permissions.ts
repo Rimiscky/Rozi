@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { hasPermission, type Permission } from "@/lib/permission-policy";
 
 export async function requireUser() {
   const session = await auth();
@@ -11,7 +12,11 @@ export async function requireUser() {
 }
 
 export async function requireAdmin() {
+  return requirePermission("user.admin");
+}
+
+export async function requirePermission(permission: Permission) {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/tableau-de-bord");
+  if (!hasPermission(user.role, permission)) redirect("/tableau-de-bord?erreur=acces-interdit");
   return user;
 }

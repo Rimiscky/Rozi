@@ -105,12 +105,24 @@ export async function updateProduct(productId: string, _: ProductState, formData
 export async function toggleProductStatus(formData: FormData) {
   const user = await requireAdmin();
   const productId = z.string().uuid().parse(formData.get("productId"));
-  const product = await prisma.product.findUnique({ where: { id: productId }, include: { inventory: true } });
-  if (!product) return;
-  if (product.isActive && Number(product.inventory?.quantity ?? 0) > 0) return;
-  await prisma.$transaction([
-    prisma.product.update({ where: { id: productId }, data: { isActive: !product.isActive } }),
-    prisma.auditLog.create({ data: { userId: user.id, action: product.isActive ? "PRODUCT_ARCHIVED" : "PRODUCT_REACTIVATED", entityType: "Product", entityId: productId } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ isActive: boolean; quantity: Prisma.Decimal }>>`
+      SELECT p."isActive", i.quantity
+      FROM products p
+      INNER JOIN inventories i ON i."productId" = p.id
+      WHERE p.id = ${productId}::uuid
+      FOR UPDATE OF p, i
+    `;
+    const product = rows[0];
+    if (!product) return;
+    if (product.isActive && product.quantity.greaterThan(0)) return;
+    if (product.isActive) {
+      const openOrder = await tx.purchaseOrderLine.findFirst({ where: { productId, purchaseOrder: { status: "ORDERED" } }, select: { id: true } });
+      if (openOrder) return;
+    }
+    const targetActive = !product.isActive;
+    await tx.product.update({ where: { id: productId }, data: { isActive: targetActive } });
+    await tx.auditLog.create({ data: { userId: user.id, action: targetActive ? "PRODUCT_REACTIVATED" : "PRODUCT_ARCHIVED", entityType: "Product", entityId: productId, metadata: { before: { isActive: product.isActive }, after: { isActive: targetActive } } } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   revalidatePath(`/produits/${productId}`); revalidatePath("/produits");
 }

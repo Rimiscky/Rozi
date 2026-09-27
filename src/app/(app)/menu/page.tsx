@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, ChevronRight, ClipboardList, KeyRound, Settings, SlidersHorizontal, Users } from "lucide-react";
+import { BarChart3, ChevronRight, ClipboardList, FileSpreadsheet, KeyRound, Settings, ShieldCheck, ShoppingCart, SlidersHorizontal, Users } from "lucide-react";
 import { requireUser } from "@/lib/permissions";
 
 export default async function MenuPage() {
@@ -10,6 +10,9 @@ export default async function MenuPage() {
     { href: "/rapports", label: "Rapports", description: "Analyser une période", icon: BarChart3 },
     ...(user.role === "ADMIN" ? [
       { href: "/ajustements/nouveau", label: "Ajuster le stock", description: "Corriger après un inventaire", icon: SlidersHorizontal },
+      { href: "/bons-de-commande", label: "Bons de commande", description: "Commander et réceptionner", icon: ShoppingCart },
+      { href: "/imports", label: "Imports et exports", description: "Échanger des données CSV", icon: FileSpreadsheet },
+      { href: "/journal-audit", label: "Journal d’audit", description: "Contrôler les actions sensibles", icon: ShieldCheck },
       { href: "/utilisateurs", label: "Utilisateurs", description: "Gérer les comptes et les rôles", icon: Users },
       { href: "/parametres", label: "Paramètres", description: "Catégories, unités et fournisseurs", icon: Settings },
     ] : []),

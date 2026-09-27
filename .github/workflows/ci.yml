@@ -19,8 +19,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://rozi:ci-password@127.0.0.1:5432/rozi
+      DATABASE_URL: postgresql://rozi:rozi-ci-password@127.0.0.1:5432/rozi_test
+      DATABASE_URL_TEST: postgresql://rozi:rozi-ci-password@127.0.0.1:5432/rozi_test
       AUTH_SECRET: ci-only-secret-with-at-least-thirty-two-characters
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: rozi_test
+          POSTGRES_USER: rozi
+          POSTGRES_PASSWORD: rozi-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rozi -d rozi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Récupérer le projet
         uses: actions/checkout@v4
@@ -31,7 +46,7 @@ jobs:
           node-version: 24
 
       - name: Installer les dépendances
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Générer Prisma
         run: npm run db:generate
@@ -39,8 +54,14 @@ jobs:
       - name: Valider le schéma Prisma
         run: npx prisma validate
 
+      - name: Appliquer les migrations
+        run: npx prisma migrate deploy
+
       - name: Exécuter les tests
         run: npm test
+
+      - name: Tester les transactions concurrentes
+        run: npm run test:integration
 
       - name: Vérifier TypeScript
         run: npm run typecheck
