@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { wholeQuantity } from "@/lib/quantity";
 import { MovementReason, MovementType } from "@/generated/prisma/client";
 import { requireAdmin } from "@/lib/permissions";
 import { recordStockMovement, StockError } from "@/modules/inventory/movement-service";
@@ -11,7 +12,7 @@ export type AdjustmentState = { error?: string };
 export async function createAdjustment(_: AdjustmentState, formData: FormData): Promise<AdjustmentState> {
   const user = await requireAdmin();
   const parsed = z.object({
-    productId: z.string().uuid(), countedQuantity: z.coerce.number().min(0).max(999999999),
+    productId: z.string().uuid(), countedQuantity: wholeQuantity,
     comment: z.string().trim().min(5, "Expliquez la raison de la correction.").max(2000), occurredAt: z.coerce.date().max(new Date(), "La date ne peut pas être dans le futur."),
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };

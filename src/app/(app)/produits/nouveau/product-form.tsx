@@ -11,13 +11,14 @@ export function ProductForm({ categories, units, suppliers }: { categories: Choi
   const [state, action, pending] = useActionState(createProduct, {} as ProductState);
   return <form action={action} className="space-y-6">
     {state.error ? <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{state.error}</p> : null}
+    <p className="text-sm text-[var(--ink-soft)]">Saisissez les quantités en nombres entiers, par exemple 201 pour 201 unités.</p>
     <div className="grid gap-5 md:grid-cols-2">
       <Field title="Nom du produit"><input name="name" defaultValue={state.fields?.name} className={input} placeholder="Ex. Ciment 50 kg" required /></Field>
       <Field title="Référence / SKU"><input name="sku" defaultValue={state.fields?.sku} className={input} placeholder="Ex. CIM-50" required /></Field>
       <Field title="Catégorie"><select name="categoryId" defaultValue={state.fields?.categoryId ?? ""} className={input} required><option value="" disabled>Choisir une catégorie</option>{categories.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
       <Field title="Unité"><select name="unitId" defaultValue={state.fields?.unitId ?? ""} className={input} required><option value="" disabled>Choisir une unité</option>{units.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-      <Field title="Stock initial"><input name="initialStock" type="number" step="0.001" min="0" defaultValue={state.fields?.initialStock ?? "0"} className={input} required /></Field>
-      <Field title="Seuil d’alerte"><input name="alertThreshold" type="number" step="0.001" min="0" defaultValue={state.fields?.alertThreshold ?? "0"} className={input} required /></Field>
+      <Field title="Stock initial"><input name="initialStock" type="number" step="1" inputMode="numeric" min="0" defaultValue={state.fields?.initialStock ?? "0"} className={input} required /></Field>
+      <Field title="Seuil d’alerte"><input name="alertThreshold" type="number" step="1" inputMode="numeric" min="0" defaultValue={state.fields?.alertThreshold ?? "0"} className={input} required /></Field>
       <Field title="Prix d’achat (facultatif)"><input name="purchasePrice" type="number" step="0.01" min="0" defaultValue={state.fields?.purchasePrice} className={input} placeholder="0,00" /></Field>
       <Field title="Prix de vente (facultatif)"><input name="salePrice" type="number" step="0.01" min="0" defaultValue={state.fields?.salePrice} className={input} placeholder="0,00" /></Field>
       <Field title="Fournisseur principal (facultatif)"><select name="supplierId" defaultValue={state.fields?.supplierId ?? ""} className={input}><option value="">Aucun fournisseur</option>{suppliers.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>

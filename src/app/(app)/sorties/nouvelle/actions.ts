@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { wholeQuantity } from "@/lib/quantity";
 import { MovementReason, MovementType } from "@/generated/prisma/client";
 import { requireUser } from "@/lib/permissions";
 import { recordStockMovement, StockError } from "@/modules/inventory/movement-service";
@@ -15,7 +16,7 @@ const optionalComment = z.preprocess(v => v === "" ? undefined : v, z.string().t
 export async function createExit(_: ExitState, formData: FormData): Promise<ExitState> {
   const user = await requireUser();
   const parsed = z.object({
-    productId: z.string().uuid(), quantity: z.coerce.number().positive().max(999999999),
+    productId: z.string().uuid(), quantity: wholeQuantity.min(1, "La quantité doit être au moins égale à 1."),
     reason: z.enum(["SALE", "INTERNAL_USE", "DAMAGED", "LOSS", "SUPPLIER_RETURN", "OTHER"]),
     customerName: optionalCustomer, reference: optionalReference, comment: optionalComment, occurredAt: z.coerce.date().max(new Date(), "La date ne peut pas être dans le futur."),
   }).safeParse(Object.fromEntries(formData));

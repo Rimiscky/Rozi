@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { wholeQuantity } from "@/lib/quantity";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/permissions";
 import { MovementReason, MovementType, Prisma } from "@/generated/prisma/client";
@@ -18,8 +19,8 @@ const schema = z.object({
   unitId: z.string().uuid(),
   supplierId: optionalId,
   description: z.preprocess((v) => v === "" ? undefined : v, z.string().trim().max(2000).optional()),
-  alertThreshold: z.coerce.number().min(0).max(999999999),
-  initialStock: z.coerce.number().min(0).max(999999999),
+  alertThreshold: wholeQuantity,
+  initialStock: wholeQuantity,
   purchasePrice: optionalPrice,
   salePrice: optionalPrice,
 });
