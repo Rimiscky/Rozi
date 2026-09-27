@@ -9,7 +9,7 @@ import { DashboardCharts } from "./dashboard-charts";
 export default async function DashboardPage() {
   const user = await requireUser(); const now = new Date(); const today = new Date(now); today.setHours(0, 0, 0, 0); const sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const [products, todayMovements, recentMovements, weeklyMovements, rotationMovements] = await Promise.all([
-    prisma.product.findMany({ where: { isActive: true }, include: { inventory: true, unit: true } }),
+    prisma.product.findMany({ where: { isActive: true }, include: { inventory: true, unit: true }, orderBy: [{ name: "asc" }, { id: "asc" }] }),
     prisma.stockMovement.findMany({ where: { occurredAt: { gte: today }, type: { in: [MovementType.IN, MovementType.OUT] } }, select: { type: true } }),
     prisma.stockMovement.findMany({ orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], take: 6, include: { product: { include: { unit: true } }, user: { select: { name: true } } } }),
     prisma.stockMovement.findMany({ where: { occurredAt: { gte: sevenDaysAgo }, type: { in: [MovementType.IN, MovementType.OUT] } }, select: { occurredAt: true, type: true, quantity: true } }),
@@ -23,7 +23,41 @@ export default async function DashboardPage() {
     <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-1 text-sm font-bold capitalize text-[var(--brand)]">{new Intl.DateTimeFormat("fr-FR", { dateStyle: "full" }).format(now)}</p><h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Bonjour, {user.name?.split(" ")[0] ?? user.username}</h1><p className="mt-2 text-sm text-[var(--ink-soft)] sm:text-base">Voici la situation actuelle de votre stock.</p></div><div className="grid grid-cols-2 gap-3"><Link href="/entrees/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-bold"><ArrowDownToLine size={18} className="text-[var(--brand)]" /> Entrée</Link><Link href="/sorties/nouvelle" className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--brand)] px-4 text-sm font-bold text-white"><ArrowUpFromLine size={18} /> Sortie</Link></div></section>
     <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">{stats.map(({ label, value, note, icon: Icon, tone }) => <article key={label} className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><p className="text-sm font-bold text-[var(--ink-soft)]">{label}</p><span className={`hidden size-9 place-items-center rounded-xl sm:grid ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "orange" ? "bg-amber-50 text-amber-700" : tone === "red" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}><Icon size={18} /></span></div><strong className="mt-4 block text-3xl font-extrabold tracking-tight">{value}</strong><span className="mt-1 block text-xs text-[var(--ink-soft)]">{note}</span></article>)}</section>
     {(lowProducts.length || outProducts.length) ? <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><div className="flex items-center justify-between"><div><h2 className="font-extrabold text-amber-950">Produits à réapprovisionner</h2><p className="mt-1 text-sm text-amber-800">{lowProducts.length} stock(s) faible(s) et {outProducts.length} rupture(s).</p></div><Link href="/produits" className="text-sm font-bold text-amber-950">Voir les produits</Link></div><div className="mt-4 flex flex-wrap gap-2">{[...outProducts, ...lowProducts].slice(0, 8).map(p => <Link key={p.id} href={`/produits/${p.id}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-amber-950">{p.name} · {Number(p.inventory?.quantity ?? 0)} {p.unit.symbol}</Link>)}</div></section> : null}
-    <section className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6"><div><h2 className="text-lg font-extrabold">Rotation et couverture sur 30 jours</h2><p className="mt-1 text-sm text-[var(--ink-soft)]">Les ventes et usages internes sont séparés des pertes et corrections. Les unités ne sont jamais additionnées entre elles.</p></div><div className="mt-4 divide-y divide-[var(--line)]">{rotationRows.slice(0, 5).map(({ product, metrics }) => <Link key={product.id} href={`/produits/${product.id}`} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_8rem_9rem]"><div><strong>{product.name}</strong><p className="text-xs text-[var(--ink-soft)]">{metrics.demandOut} {product.unit.symbol} demandé(s)</p></div><span>Rotation : {metrics.rotation === null ? "—" : metrics.rotation.toFixed(2)}</span><span>Couverture : {metrics.coverageDays === null ? "—" : `${Math.round(metrics.coverageDays)} j`}</span></Link>)}{!rotationRows.length ? <p className="py-8 text-center text-sm text-[var(--ink-soft)]">Données insuffisantes.</p> : null}</div></section>
+    <section aria-labelledby="stock-quantities-title" className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="stock-quantities-title" className="text-lg font-extrabold">Quantités en stock</h2>
+          <p className="mt-1 text-sm text-[var(--ink-soft)]">Stock actuel de chaque produit</p>
+        </div>
+        <Link href="/produits" className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[var(--brand)]">Voir les produits <ArrowRight size={16} aria-hidden="true" /></Link>
+      </div>
+      {products.length ? (
+        <div className="mt-4 max-h-96 overflow-auto rounded-lg focus-visible:outline-2 focus-visible:outline-[var(--brand)]" role="region" aria-label="Quantités par produit" tabIndex={0}>
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white text-[var(--ink-soft)]">
+              <tr className="border-b border-[var(--line)]">
+                <th scope="col" className="py-3 pr-4 text-left font-bold">Produit</th>
+                <th scope="col" className="py-3 text-right font-bold">Quantité</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--line)]">
+              {products.map(product => (
+                <tr key={product.id}>
+                  <th scope="row" className="py-3 pr-4 text-left font-normal">
+                    <Link href={`/produits/${product.id}`} className="inline-flex min-h-11 items-center font-extrabold text-[var(--ink)] hover:underline">{product.name}</Link>
+                    <span className="block text-xs text-[var(--ink-soft)]">{product.sku}</span>
+                  </th>
+                  <td className="whitespace-nowrap py-3 text-right">
+                    <strong className="text-2xl font-extrabold tabular-nums">{new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 3 }).format(Number(product.inventory?.quantity ?? 0))}</strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="py-8 text-center text-sm text-[var(--ink-soft)]">Ajoutez votre premier produit pour afficher sa quantité en stock.</p>}
+    </section>
+    <section className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6"><div><h2 className="text-lg font-extrabold">Rotation et couverture sur 30 jours</h2><p className="mt-1 text-sm text-[var(--ink-soft)]">Les ventes et usages internes sont séparés des pertes et corrections. Les unités ne sont jamais additionnées entre elles.</p></div><div className="mt-4 divide-y divide-[var(--line)]">{rotationRows.slice(0, 5).map(({ product, metrics }) => <Link key={product.id} href={`/produits/${product.id}`} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_8rem_9rem]"><div><strong>{product.name}</strong><p className="text-xs text-[var(--ink-soft)]">{metrics.demandOut} {product.unit.symbol} demandé(s)</p></div><span>Rotation : {metrics.rotation === null ? "-" : metrics.rotation.toFixed(2)}</span><span>Couverture : {metrics.coverageDays === null ? "-" : `${Math.round(metrics.coverageDays)} j`}</span></Link>)}{!rotationRows.length ? <p className="py-8 text-center text-sm text-[var(--ink-soft)]">Données insuffisantes.</p> : null}</div></section>
     <DashboardCharts daily={daily} topProducts={topProducts} />
     <section className="rounded-2xl border border-[var(--line)] bg-white p-5 sm:p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-extrabold">Mouvements récents</h2><p className="mt-1 text-sm text-[var(--ink-soft)]">Dernières opérations enregistrées</p></div><Link href="/historique" className="flex items-center gap-1 text-sm font-bold text-[var(--brand)]">Tout voir <ArrowRight size={16} /></Link></div><div className="mt-4 divide-y divide-[var(--line)]">{recentMovements.map(m => <div key={m.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[1fr_8rem_8rem]"><div><Link href={`/produits/${m.productId}`} className="font-extrabold">{m.product.name}</Link><p className="text-xs text-[var(--ink-soft)]">{m.user.name} · {new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "short" }).format(m.occurredAt)}</p></div><strong>{m.delta.greaterThan(0) ? "+" : ""}{Number(m.delta)} {m.product.unit.symbol}</strong><span className="text-[var(--ink-soft)]">{Number(m.stockBefore)} → {Number(m.stockAfter)}</span></div>)}{!recentMovements.length ? <p className="py-10 text-center text-sm text-[var(--ink-soft)]">Aucun mouvement pour le moment.</p> : null}</div></section>
   </div>;
